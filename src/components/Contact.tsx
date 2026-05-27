@@ -4,43 +4,8 @@ import { Textarea } from "./ui/textarea"
 import { Button } from "./ui/button"
 import { Mail } from "lucide-react"
 import { GithubIcon, LinkedinIcon } from "./Icons"
-import { useState } from "react"
 
 export function Contact() {
-  const [result, setResult] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
-
-  const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setIsSubmitting(true)
-    setResult("Sending...")
-
-    const formData = new FormData(event.currentTarget)
-    formData.append("access_key", "891298d7-4fe8-4d73-a511-9f3a656f9960")
-
-    try {
-      const response = await fetch("https://api.web3forms.com/submit", {
-        method: "POST",
-        body: formData
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        setResult("Message sent successfully! I'll get back to you soon.")
-        event.currentTarget.reset()
-      } else {
-        console.error("Error", data)
-        setResult(data.message)
-      }
-    } catch (error) {
-      setResult("An error occurred. Please try again later.")
-    } finally {
-      setIsSubmitting(false)
-      setTimeout(() => setResult(""), 5000)
-    }
-  }
-
   return (
     <section className="py-24 px-6 relative" id="contact">
       <div className="max-w-4xl mx-auto">
@@ -65,7 +30,10 @@ export function Contact() {
             viewport={{ once: true }}
             transition={{ type: "spring", stiffness: 80, damping: 20 }}
           >
-            <form className="space-y-6" onSubmit={onSubmit}>
+            {/* Standard HTML Form Submission for Web3Forms */}
+            <form action="https://api.web3forms.com/submit" method="POST" className="space-y-6">
+              <input type="hidden" name="access_key" value="891298d7-4fe8-4d73-a511-9f3a656f9960" />
+              
               <div className="space-y-2">
                 <label htmlFor="name" className="text-sm font-medium leading-none">Name</label>
                 <Input id="name" name="name" autoComplete="name" required placeholder="John Doe" />
@@ -78,14 +46,9 @@ export function Contact() {
                 <label htmlFor="message" className="text-sm font-medium leading-none">Message</label>
                 <Textarea id="message" name="message" required placeholder="Your message..." className="min-h-[150px]" />
               </div>
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? "Sending..." : "Send Message"}
+              <Button type="submit" className="w-full">
+                Send Message
               </Button>
-              {result && (
-                <p className={`text-sm font-medium text-center transition-all ${result.includes("successfully") ? "text-green-500" : "text-primary"}`}>
-                  {result}
-                </p>
-              )}
             </form>
           </motion.div>
 
