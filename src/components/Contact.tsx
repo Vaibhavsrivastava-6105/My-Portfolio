@@ -68,11 +68,11 @@ export function Contact() {
             <form className="space-y-6" onSubmit={onSubmit}>
               <div className="space-y-2">
                 <label htmlFor="name" className="text-sm font-medium leading-none">Name</label>
-                <Input id="name" name="name" required placeholder="John Doe" />
+                <Input id="name" name="name" autoComplete="name" required placeholder="John Doe" />
               </div>
               <div className="space-y-2">
                 <label htmlFor="email" className="text-sm font-medium leading-none">Email</label>
-                <Input id="email" name="email" type="email" required placeholder="john@example.com" />
+                <Input id="email" name="email" type="email" autoComplete="email" required placeholder="john@example.com" />
               </div>
               <div className="space-y-2">
                 <label htmlFor="message" className="text-sm font-medium leading-none">Message</label>
