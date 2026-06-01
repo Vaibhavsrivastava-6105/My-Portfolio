@@ -6,6 +6,13 @@ import { GithubIcon } from "./Icons"
 
 const projects = [
   {
+    title: "Herbalia",
+    description: "An AI-powered botanical assistant and plant doctor. Features a universal plant identifier, an automated disease & health scanner, and a generative AI chat assistant.",
+    tech: ["JavaScript", "HTML/CSS", "TensorFlow.js", "Gemini API"],
+    github: "https://github.com/Vaibhavsrivastava-6105/herbalia",
+    demo: "https://herbaliaweb.vercel.app/"
+  },
+  {
     title: "AI Product Recommendation System",
     description: "An intelligent recommendation engine utilizing AI and ML algorithms to suggest relevant products to users based on preferences and behavior.",
     tech: ["Python", "Machine Learning", "React", "API Integration"],
