@@ -7,7 +7,7 @@
     "status": "open to work"
   },
   "about": {
-    "description": "hi i am vaibhav",
+    "description": "My programming journey is driven by an obsession with creating systems that feel alive. I specialize in designing intelligent backend architectures with Node.js and Python, while crafting pixel-perfect, highly animated frontend interfaces using React, Tailwind CSS, and Framer Motion. When I'm not coding, I'm usually reading about the latest breakthroughs in Machine Learning.",
     "techStack": [
       {
         "name": "Python",
