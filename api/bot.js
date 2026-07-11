@@ -105,18 +105,55 @@ export default async function handler(req, res) {
     if (!putRes.ok) throw new Error(`GitHub API PUT error`);
   };
 
-  // Cart Data Helper
-  const getWorkingData = async (chatId) => {
-    let cartData = await redis.get(`cart:${chatId}`);
-    if (cartData) {
-      return { portfolioData: cartData, isCart: true };
+  // Event Sourcing Cart Logic
+  const computePortfolioData = (baseData, actions) => {
+    let data = JSON.parse(JSON.stringify(baseData)); // deep clone
+    for (const action of actions) {
+      if (action.type === 'edit_bio') data.hero.bio = action.payload;
+      else if (action.type === 'edit_title') data.hero.title = action.payload;
+      else if (action.type === 'edit_status') data.hero.status = action.payload;
+      else if (action.type === 'update_hero_image') data.hero.image = action.payload;
+      else if (action.type === 'edit_resume') data.hero.resumeLink = action.payload;
+      else if (action.type === 'edit_about') data.about.description = action.payload;
+      else if (action.type === 'add_project') {
+        if (!data.projects) data.projects = [];
+        data.projects.push(action.payload);
+      }
+      else if (action.type === 'add_achievement') {
+        if (!data.achievements) data.achievements = [];
+        data.achievements.push(action.payload);
+      }
+      else if (action.type === 'delete_project') {
+        if (data.projects && data.projects[action.payload]) {
+          data.projects.splice(action.payload, 1);
+        }
+      }
+      else if (action.type === 'delete_achievement') {
+        if (data.achievements && data.achievements[action.payload]) {
+          data.achievements.splice(action.payload, 1);
+        }
+      }
     }
-    const { portfolioData } = await fetchPortfolioData();
-    return { portfolioData, isCart: false };
+    return data;
+  };
+
+  const getWorkingData = async (chatId) => {
+    const { portfolioData, fileData, fileUrl } = await fetchPortfolioData();
+    const actions = await redis.get(`cart_actions:${chatId}`) || [];
+    const computedData = computePortfolioData(portfolioData, actions);
+    return { portfolioData: computedData, actions, fileData, fileUrl };
+  };
+
+  const addActionToCart = async (chatId, action) => {
+    const actions = await redis.get(`cart_actions:${chatId}`) || [];
+    actions.push(action);
+    await redis.set(`cart_actions:${chatId}`, actions);
   };
 
   const sendMainMenu = async (chatId) => {
-    const hasCart = await redis.exists(`cart:${chatId}`);
+    const actions = await redis.get(`cart_actions:${chatId}`) || [];
+    const hasCart = actions.length > 0;
+    
     const keyboard = {
       inline_keyboard: [
         [{ text: "🔴 Update Status Badge", callback_data: "edit_status" }],
@@ -128,12 +165,12 @@ export default async function handler(req, res) {
     };
     
     if (hasCart) {
-      keyboard.inline_keyboard.push([{ text: "🛒 View & Push Cart", callback_data: "view_cart" }, { text: "🗑️ Empty Cart", callback_data: "empty_cart" }]);
+      keyboard.inline_keyboard.unshift([{ text: `🛒 View & Push Cart (${actions.length})`, callback_data: "view_cart" }, { text: "🗑️ Empty Cart", callback_data: "empty_cart" }]);
     }
     keyboard.inline_keyboard.push([{ text: "❌ Cancel", callback_data: "cancel" }]);
 
     const text = hasCart 
-      ? "🤖 <b>Portfolio Command Center</b>\n\n⚠️ <i>You have unsaved changes in your Cart!</i>\nSelect an action below:"
+      ? `🤖 <b>Portfolio Command Center</b>\n\n⚠️ <i>You have ${actions.length} unsaved changes in your Cart!</i>\nSelect an action below:`
       : "🤖 <b>Portfolio Command Center</b>\n\nSelect an action below or type /cancel to abort at any time.";
       
     await sendMessage(chatId, text, keyboard);
@@ -214,10 +251,10 @@ export default async function handler(req, res) {
         return res.status(200).send('OK');
       }
 
-      // --- CART ACTIONS ---
+      // --- EVENT-SOURCED CART ACTIONS ---
       if (data === 'empty_cart') {
         await answerCallback(cb.id, "Cart Emptied!");
-        await redis.del(`cart:${chatId}`);
+        await redis.del(`cart_actions:${chatId}`);
         await editMessageText(chatId, cb.message.message_id, "🗑️ Cart emptied. All pending changes discarded.");
         await sendMainMenu(chatId);
         return res.status(200).send('OK');
@@ -225,13 +262,59 @@ export default async function handler(req, res) {
 
       if (data === 'view_cart') {
         await answerCallback(cb.id);
-        const keyboard = {
-          inline_keyboard: [
-            [{ text: "🚀 Push Cart to Live Website", callback_data: "push_cart" }],
-            [{ text: "🔙 Back to Menu", callback_data: "show_menu" }]
-          ]
-        };
-        await editMessageText(chatId, cb.message.message_id, "🛒 <b>Your Cart</b>\n\nYou have pending changes ready to be published. Push them now to update your live website?", keyboard);
+        const actions = await redis.get(`cart_actions:${chatId}`) || [];
+        
+        if (actions.length === 0) {
+           await editMessageText(chatId, cb.message.message_id, "Your cart is empty!");
+           await sendMainMenu(chatId);
+           return res.status(200).send('OK');
+        }
+
+        let msgText = `🛒 <b>Your Cart (${actions.length} pending changes):</b>\n\n`;
+        const keyboard = { inline_keyboard: [] };
+        
+        actions.forEach((action, idx) => {
+           msgText += `${idx + 1}. ${action.desc}\n`;
+           keyboard.inline_keyboard.push([{ text: `❌ Remove #${idx + 1}`, callback_data: `rm_cart_${idx}` }]);
+        });
+
+        msgText += `\nPush these changes to update your live website?`;
+        
+        keyboard.inline_keyboard.push([{ text: "🚀 Push Cart to Live Website", callback_data: "push_cart" }]);
+        keyboard.inline_keyboard.push([{ text: "🔙 Back to Menu", callback_data: "show_menu" }]);
+
+        await editMessageText(chatId, cb.message.message_id, msgText, keyboard);
+        return res.status(200).send('OK');
+      }
+
+      if (data.startsWith('rm_cart_')) {
+        const index = parseInt(data.replace('rm_cart_', ''));
+        const actions = await redis.get(`cart_actions:${chatId}`) || [];
+        
+        if (actions[index]) {
+          const removed = actions[index].desc;
+          actions.splice(index, 1);
+          await redis.set(`cart_actions:${chatId}`, actions);
+          await answerCallback(cb.id, "Removed!");
+          
+          if (actions.length === 0) {
+            await editMessageText(chatId, cb.message.message_id, `Removed: ${removed}\n\nYour cart is now empty.`);
+            await sendMainMenu(chatId);
+          } else {
+             let msgText = `🛒 <b>Your Cart (${actions.length} pending changes):</b>\n\n`;
+             const keyboard = { inline_keyboard: [] };
+             actions.forEach((action, idx) => {
+                msgText += `${idx + 1}. ${action.desc}\n`;
+                keyboard.inline_keyboard.push([{ text: `❌ Remove #${idx + 1}`, callback_data: `rm_cart_${idx}` }]);
+             });
+             msgText += `\n<i>(Removed: ${removed})</i>\n\nPush these changes to update your live website?`;
+             keyboard.inline_keyboard.push([{ text: "🚀 Push Cart to Live Website", callback_data: "push_cart" }]);
+             keyboard.inline_keyboard.push([{ text: "🔙 Back to Menu", callback_data: "show_menu" }]);
+             await editMessageText(chatId, cb.message.message_id, msgText, keyboard);
+          }
+        } else {
+          await answerCallback(cb.id, "Error removing item.");
+        }
         return res.status(200).send('OK');
       }
 
@@ -239,16 +322,16 @@ export default async function handler(req, res) {
         await answerCallback(cb.id, "Pushing to GitHub...");
         await editMessageText(chatId, cb.message.message_id, "⏳ <i>Pushing Cart... This will trigger a Vercel rebuild.</i>");
         
-        const cartData = await redis.get(`cart:${chatId}`);
-        if (!cartData) {
+        const { portfolioData, fileData, fileUrl, actions } = await getWorkingData(chatId);
+        
+        if (actions.length === 0) {
            await sendMessage(chatId, "Your cart is empty!", { inline_keyboard: [[{ text: "🔙 Main Menu", callback_data: "show_menu" }]] });
            return res.status(200).send('OK');
         }
 
-        const { fileData, fileUrl } = await fetchPortfolioData(); // to get fresh SHA for commit
-        await commitPortfolioData(cartData, fileData, fileUrl, `🤖 Bot: Pushed Cart updates to website`);
-        await redis.del(`cart:${chatId}`);
-        await sendMessage(chatId, "✅ <b>Successfully pushed Cart to GitHub!</b>\n\nVercel is now rebuilding your site.", {
+        await commitPortfolioData(portfolioData, fileData, fileUrl, `🤖 Bot: Pushed ${actions.length} batched updates`);
+        await redis.del(`cart_actions:${chatId}`);
+        await sendMessage(chatId, `✅ <b>Successfully pushed ${actions.length} changes to GitHub!</b>\n\nVercel is now rebuilding your site.`, {
           inline_keyboard: [[{ text: "🔙 Main Menu", callback_data: "show_menu" }]]
         });
         return res.status(200).send('OK');
@@ -303,30 +386,30 @@ export default async function handler(req, res) {
         await answerCallback(cb.id, "Adding to Cart...");
         await editMessageText(chatId, cb.message.message_id, "⏳ <i>Adding to Cart...</i>");
 
-        const { portfolioData } = await getWorkingData(chatId);
-
+        let actionDesc = "";
+        let actionPayload = {};
         if (session.action === 'add_project') {
-          if (!portfolioData.projects) portfolioData.projects = [];
-          portfolioData.projects.push({
+          actionPayload = {
             title: session.draft.title,
             description: session.draft.description,
             tech: session.draft.tech.split(',').map(t => t.trim()),
             github: session.draft.github,
             demo: session.draft.demo
-          });
+          };
+          actionDesc = `💻 Added Project: ${session.draft.title}`;
         } else if (session.action === 'add_achievement') {
-          if (!portfolioData.achievements) portfolioData.achievements = [];
-          portfolioData.achievements.push({
+          actionPayload = {
             title: session.draft.title,
             description: session.draft.description,
             badgeUrl: session.draft.badgeUrl,
             certificateUrl: session.draft.certificateUrl
-          });
+          };
+          actionDesc = `🏆 Added Achievement: ${session.draft.title}`;
         }
 
-        await redis.set(`cart:${chatId}`, portfolioData);
+        await addActionToCart(chatId, { type: session.action, payload: actionPayload, desc: actionDesc });
         await redis.del(`session:${chatId}`);
-        await sendMessage(chatId, "✅ <b>Successfully added to Cart!</b>", {
+        await sendMessage(chatId, `✅ <b>Added to Cart:</b>\n${actionDesc}`, {
           inline_keyboard: [[{ text: "🛒 View Cart", callback_data: "view_cart" }, { text: "🔙 Main Menu", callback_data: "show_menu" }]]
         });
         return res.status(200).send('OK');
@@ -348,6 +431,7 @@ export default async function handler(req, res) {
       if (data === 'del_proj_menu' || data === 'del_ach_menu') {
         await answerCallback(cb.id, "Fetching items...");
         await editMessageText(chatId, cb.message.message_id, "🤖 <b>Portfolio Command Center</b>\n\n<i>(Menu closed)</i>");
+        
         const { portfolioData } = await getWorkingData(chatId);
         const items = data === 'del_proj_menu' ? (portfolioData.projects || []) : (portfolioData.achievements || []);
         
@@ -375,19 +459,20 @@ export default async function handler(req, res) {
         await editMessageText(chatId, cb.message.message_id, "⏳ <i>Adding deletion to Cart...</i>");
 
         const { portfolioData } = await getWorkingData(chatId);
-        
         let deletedItemName = "";
         const targetArray = isProject ? portfolioData.projects : portfolioData.achievements;
         
         if (targetArray && targetArray[index]) {
           deletedItemName = targetArray[index].title;
-          targetArray.splice(index, 1);
+          const actionType = isProject ? 'delete_project' : 'delete_achievement';
+          const icon = isProject ? '💻' : '🏆';
+          
+          await addActionToCart(chatId, { type: actionType, payload: index, desc: `🗑️ Deleted ${icon}: ${deletedItemName}` });
+          
+          await sendMessage(chatId, `✅ <b>Added to Cart:</b>\n🗑️ Deleted ${deletedItemName}`, {
+            inline_keyboard: [[{ text: "🛒 View Cart", callback_data: "view_cart" }, { text: "🔙 Main Menu", callback_data: "show_menu" }]]
+          });
         }
-
-        await redis.set(`cart:${chatId}`, portfolioData);
-        await sendMessage(chatId, `✅ <b>Added deletion of "${deletedItemName}" to Cart!</b>`, {
-          inline_keyboard: [[{ text: "🛒 View Cart", callback_data: "view_cart" }, { text: "🔙 Main Menu", callback_data: "show_menu" }]]
-        });
         return res.status(200).send('OK');
       }
 
@@ -437,18 +522,19 @@ export default async function handler(req, res) {
       if (session && session.action.startsWith('edit_') || session?.action === 'update_hero_image') {
         await sendMessage(chatId, `⏳ <i>Adding change to Cart...</i>`);
 
-        const { portfolioData } = await getWorkingData(chatId);
-
-        if (session.action === 'edit_bio') portfolioData.hero.bio = text;
-        else if (session.action === 'edit_title') portfolioData.hero.title = text;
-        else if (session.action === 'edit_status') portfolioData.hero.status = text;
-        else if (session.action === 'update_hero_image') portfolioData.hero.image = text;
-        else if (session.action === 'edit_resume') portfolioData.hero.resumeLink = text;
-        else if (session.action === 'edit_about') portfolioData.about.description = text;
-
-        await redis.set(`cart:${chatId}`, portfolioData);
+        let descMap = {
+          'edit_bio': "✏️ Edited Bio",
+          'edit_title': "✏️ Edited Title",
+          'edit_status': "🔴 Updated Status Badge",
+          'update_hero_image': "🌅 Updated Hero Image",
+          'edit_resume': "📎 Updated Resume Link",
+          'edit_about': "📖 Edited About Me"
+        };
+        
+        await addActionToCart(chatId, { type: session.action, payload: text, desc: descMap[session.action] });
         await redis.del(`session:${chatId}`);
-        await sendMessage(chatId, "✅ <b>Change added to Cart!</b>", {
+        
+        await sendMessage(chatId, `✅ <b>Added to Cart:</b>\n${descMap[session.action]}`, {
           inline_keyboard: [[{ text: "🛒 View Cart", callback_data: "view_cart" }, { text: "🔙 Main Menu", callback_data: "show_menu" }]]
         });
         return res.status(200).send('OK');
