@@ -51,8 +51,14 @@ export default async function handler(req, res) {
       return res.status(200).send('OK');
     }
 
-    if (ADMIN_CHAT_ID && incomingChatId.toString() !== ADMIN_CHAT_ID) {
-      await sendMessage(incomingChatId, "⛔ <b>Unauthorized Access.</b>");
+    if (!ADMIN_CHAT_ID) {
+      await sendMessage(incomingChatId, "⛔ <b>Security Lock:</b> You must set ADMIN_CHAT_ID in your Vercel Environment Variables before using this bot. Send /myid to get your ID.");
+      if (update.callback_query) await answerCallback(update.callback_query.id, "Locked");
+      return res.status(200).send('OK');
+    }
+
+    if (incomingChatId.toString() !== ADMIN_CHAT_ID) {
+      await sendMessage(incomingChatId, "⛔ <b>Unauthorized Access.</b>\nYou are not the owner of this portfolio.");
       if (update.callback_query) await answerCallback(update.callback_query.id, "Unauthorized");
       return res.status(200).send('OK');
     }
@@ -300,6 +306,7 @@ export default async function handler(req, res) {
       }
 
       if (text === '/start' || text === '/menu') {
+        await redis.del(`session:${chatId}`); // Clear any stuck sessions
         const keyboard = {
           inline_keyboard: [
             [{ text: "🔴 Update Status Badge", callback_data: "edit_status" }],
