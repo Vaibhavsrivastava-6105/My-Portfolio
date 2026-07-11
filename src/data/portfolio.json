@@ -1,13 +1,13 @@
 {
   "hero": {
     "title": "Agentic AI Developer | Full Stack AI Engineer",
-    "bio": "AI developer focused on building autonomous AI systems, intelligent agents, and automation workflows. I enjoy working with Large Language Models, RAG, modern AI frameworks, and full-stack technologies to create scalable, real-world applications. I continuously learn, experiment, and build projects that push my understanding of artificial intelligence.",
+    "bio": "Aspiring AI Engineer passionate about Agentic AI, automation, and scalable AI applications. Quick learner who enjoys turning ideas into real-world products.",
     "image": "/IMG_20240430_224119_235.jpg",
     "resumeLink": "/Vaibhav_Srivastava_Resume.html",
     "status": "open to work"
   },
   "about": {
-    "description": "Hi, I'm Vaibhav, a B.Tech Computer Science (AI & ML) student with a strong interest in Agentic AI, AI agents, LLM applications, and workflow automation.\n\nI enjoy building intelligent systems that automate repetitive tasks, assist users in making better decisions, and solve practical real-world problems. My work combines AI with modern full-stack development to create scalable and user-friendly applications.\n\nI'm a curious and quick learner who enjoys exploring new AI frameworks, experimenting with emerging technologies, and continuously improving my skills through hands-on projects. I believe the best way to learn is by building, so I'm always working on projects that challenge me and expand my understanding of artificial intelligence.\n\nI'm currently focused on Agentic AI, RAG systems, multi-agent architectures, AI automation, and production-ready AI applications, while actively seeking opportunities to contribute to innovative AI products and collaborate with like-minded developers.",
+    "description": "I'm passionate about Agentic AI, AI automation, and building intelligent applications. I enjoy solving real-world problems through technology while constantly learning and growing as a developer.",
     "techStack": [
       {
         "name": "Python",
