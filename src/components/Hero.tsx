@@ -38,6 +38,13 @@ export function Hero() {
         >
           <motion.div variants={item} className="space-y-2">
             <h2 className="text-muted-foreground font-medium tracking-widest uppercase text-sm mb-4">Welcome to my universe</h2>
+            
+            {portfolioData.hero.status && (
+              <div className="inline-flex items-center px-3 py-1 rounded-full bg-secondary/80 border border-primary/20 backdrop-blur-sm text-sm font-medium text-foreground/90 shadow-sm mb-6 shadow-primary/10">
+                {portfolioData.hero.status}
+              </div>
+            )}
+
             <h1 className="text-5xl md:text-7xl font-extrabold tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">
               Vaibhav.
             </h1>

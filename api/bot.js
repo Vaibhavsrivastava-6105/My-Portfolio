@@ -38,10 +38,17 @@ export default async function handler(req, res) {
       const chatId = cb.message.chat.id;
       await answerCallback(cb.id);
 
-      if (cb.data === 'edit_bio') {
-        await sendMessage(chatId, "✏️ <b>Please reply to this message</b> with your new Bio:", { force_reply: true });
-      } else if (cb.data === 'edit_title') {
-        await sendMessage(chatId, "✏️ <b>Please reply to this message</b> with your new Title:", { force_reply: true });
+      const prompts = {
+        'edit_bio': "✏️ <b>Please reply to this message</b> with your new Bio:",
+        'edit_title': "✏️ <b>Please reply to this message</b> with your new Title:",
+        'edit_status': "✏️ <b>Please reply to this message</b> with your new Status (e.g. 🟢 Open to work):",
+        'edit_about': "✏️ <b>Please reply to this message</b> with your new About Me description:",
+        'edit_resume': "✏️ <b>Please reply to this message</b> with your new Resume Link (URL):",
+        'add_achievement': "🏆 <b>Please reply to this message</b> with your Achievement in this exact format:\n<code>Title | Description | Badge URL | Certificate URL</code>\n\n(Tip: use # for links you don't have)"
+      };
+
+      if (prompts[cb.data]) {
+        await sendMessage(chatId, prompts[cb.data], { force_reply: true });
       } else if (cb.data === 'cancel') {
         await sendMessage(chatId, "❌ Action cancelled. Type /menu to start again.");
       }
@@ -58,8 +65,10 @@ export default async function handler(req, res) {
       if (text === '/start' || text === '/menu') {
         const keyboard = {
           inline_keyboard: [
-            [{ text: "👤 Update Bio", callback_data: "edit_bio" }],
-            [{ text: "💼 Update Title", callback_data: "edit_title" }],
+            [{ text: "🔴 Update Status Badge", callback_data: "edit_status" }],
+            [{ text: "💼 Update Title", callback_data: "edit_title" }, { text: "👤 Update Bio", callback_data: "edit_bio" }],
+            [{ text: "📖 Update About Me", callback_data: "edit_about" }, { text: "📎 Update Resume", callback_data: "edit_resume" }],
+            [{ text: "🏆 Add Achievement", callback_data: "add_achievement" }],
             [{ text: "❌ Cancel", callback_data: "cancel" }]
           ]
         };
@@ -73,28 +82,20 @@ export default async function handler(req, res) {
 
       if (msg.reply_to_message && msg.reply_to_message.text) {
         const promptMsg = msg.reply_to_message.text;
-        if (promptMsg.includes('new Bio')) {
-          command = 'bio';
-          payload = text;
-        } else if (promptMsg.includes('new Title')) {
-          command = 'title';
-          payload = text;
-        }
+        if (promptMsg.includes('new Bio')) { command = 'bio'; payload = text; }
+        else if (promptMsg.includes('new Title')) { command = 'title'; payload = text; }
+        else if (promptMsg.includes('new Status')) { command = 'status'; payload = text; }
+        else if (promptMsg.includes('new About Me')) { command = 'about'; payload = text; }
+        else if (promptMsg.includes('new Resume Link')) { command = 'resume'; payload = text; }
+        else if (promptMsg.includes('exact format')) { command = 'achievement'; payload = text; }
       }
 
-      // Fallback for old manual commands
       if (!command) {
-        if (text.startsWith('/bio ')) {
-          command = 'bio'; payload = text.replace('/bio ', '').trim();
-        } else if (text.startsWith('/title ')) {
-          command = 'title'; payload = text.replace('/title ', '').trim();
-        } else {
-          await sendMessage(chatId, "I didn't understand that. Type /menu to see your options.");
-          return res.status(200).send('OK');
-        }
+        await sendMessage(chatId, "I didn't understand that. Type /menu to see your options.");
+        return res.status(200).send('OK');
       }
 
-      await sendMessage(chatId, `⏳ <i>Updating ${command}...</i> This will trigger a Vercel rebuild.`);
+      await sendMessage(chatId, `⏳ <i>Processing your update...</i> This will trigger a Vercel rebuild.`);
 
       // Fetch, Update, and Push to GitHub
       const fileUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}`;
@@ -108,6 +109,23 @@ export default async function handler(req, res) {
 
       if (command === 'bio') portfolioData.hero.bio = payload;
       else if (command === 'title') portfolioData.hero.title = payload;
+      else if (command === 'status') portfolioData.hero.status = payload;
+      else if (command === 'resume') portfolioData.hero.resumeLink = payload;
+      else if (command === 'about') portfolioData.about.description = payload;
+      else if (command === 'achievement') {
+        const parts = payload.split('|').map(p => p.trim());
+        if (parts.length < 2) {
+          await sendMessage(chatId, "❌ Invalid format. Please make sure to use the `|` character to separate Title and Description.");
+          return res.status(200).send('OK');
+        }
+        if (!portfolioData.achievements) portfolioData.achievements = [];
+        portfolioData.achievements.push({
+          title: parts[0] || "New Achievement",
+          description: parts[1] || "",
+          badgeUrl: parts[2] || "#",
+          certificateUrl: parts[3] || "#"
+        });
+      }
 
       const newContentBase64 = Buffer.from(JSON.stringify(portfolioData, null, 2)).toString('base64');
       const putRes = await fetch(fileUrl, {
