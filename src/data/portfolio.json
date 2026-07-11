@@ -93,12 +93,6 @@
   ],
   "achievements": [
     {
-      "title": "AWS Certified Developer",
-      "description": "Achieved the AWS Certified Developer Associate certification with a strong focus on serverless architecture.",
-      "badgeUrl": "https://img.shields.io/badge/AWS-Certified-orange?style=for-the-badge&logo=amazon-aws",
-      "certificateUrl": "#"
-    },
-    {
       "title": "Google Cloud Architect",
       "description": "Designed and deployed a highly available, serverless microservices architecture that scaled to 100k users.",
       "badgeUrl": "https://img.shields.io/badge/Google_Cloud-4285F4?style=for-the-badge&logo=google-cloud&logoColor=white",
