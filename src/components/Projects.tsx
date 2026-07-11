@@ -3,39 +3,11 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Badge } from "./ui/badge"
 import { ExternalLink } from "lucide-react"
 import { GithubIcon } from "./Icons"
-
-const projects = [
-  {
-    title: "Herbalia",
-    description: "An AI-powered botanical assistant and plant doctor. Features a universal plant identifier, an automated disease & health scanner, and a generative AI chat assistant.",
-    tech: ["JavaScript", "HTML/CSS", "TensorFlow.js", "Gemini API"],
-    github: "https://github.com/Vaibhavsrivastava-6105/herbalia",
-    demo: "https://herbaliaweb.vercel.app/"
-  },
-  {
-    title: "AI Product Recommendation System",
-    description: "An intelligent recommendation engine utilizing AI and ML algorithms to suggest relevant products to users based on preferences and behavior.",
-    tech: ["Python", "Machine Learning", "React", "API Integration"],
-    github: "https://github.com/Vaibhavsrivastava-6105/Product-Recommendation-System-",
-    demo: "https://project-recommendation-system.vercel.app/"
-  },
-  {
-    title: "Responsive E-commerce Website",
-    description: "A fully responsive e-commerce platform featuring product listings, search functionality, and a shopping cart with dynamic state management.",
-    tech: ["React", "HTML", "CSS", "JavaScript"],
-    github: "https://github.com/Vaibhavsrivastava-6105",
-    demo: "#"
-  },
-  {
-    title: "Price Tracking App",
-    description: "An application to monitor product prices and display trends over time, featuring automated price updates and responsive dashboards.",
-    tech: ["React", "HTML", "CSS", "JavaScript"],
-    github: "https://github.com/Vaibhavsrivastava-6105",
-    demo: "#"
-  }
-]
+import portfolioData from "../data/portfolio.json"
 
 export function Projects() {
+  const projects = portfolioData.projects;
+
   return (
     <section className="py-24 px-6 bg-secondary/20" id="projects">
       <div className="max-w-6xl mx-auto">

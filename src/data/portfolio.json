@@ -1,0 +1,49 @@
+{
+  "hero": {
+    "title": "Software Developer & AI/ML Student",
+    "bio": "I'm a B.Tech CSE (AI & ML) student at Babu Banarasi Das Institute of Technology & Management, Lucknow. I am passionate about Artificial Intelligence, building scalable web applications, and crafting seamless user experiences.",
+    "image": "/IMG_20240430_224119_235.jpg",
+    "resumeLink": "/Vaibhav_Srivastava_Resume.html"
+  },
+  "about": {
+    "description": "My programming journey is driven by a deep curiosity for Artificial Intelligence and web development. I specialize in building intelligent applications using Python, creating dynamic user interfaces with React, and ensuring smooth development workflows with Git and GitHub Actions. I love translating complex problems into efficient, scalable code and delivering seamless digital experiences.",
+    "techStack": [
+      { "name": "Python", "color": "text-blue-500", "icon": "🐍" },
+      { "name": "React", "color": "text-blue-400", "icon": "⚛️" },
+      { "name": "Java & C++", "color": "text-orange-500", "icon": "☕" },
+      { "name": "HTML & CSS", "color": "text-orange-400", "icon": "🌐" },
+      { "name": "Machine Learning", "color": "text-green-500", "icon": "🤖" },
+      { "name": "Git & Actions", "color": "text-red-500", "icon": "🛠️" }
+    ]
+  },
+  "projects": [
+    {
+      "title": "Herbalia",
+      "description": "An AI-powered botanical assistant and plant doctor. Features a universal plant identifier, an automated disease & health scanner, and a generative AI chat assistant.",
+      "tech": ["JavaScript", "HTML/CSS", "TensorFlow.js", "Gemini API"],
+      "github": "https://github.com/Vaibhavsrivastava-6105/herbalia",
+      "demo": "https://herbaliaweb.vercel.app/"
+    },
+    {
+      "title": "AI Product Recommendation System",
+      "description": "An intelligent recommendation engine utilizing AI and ML algorithms to suggest relevant products to users based on preferences and behavior.",
+      "tech": ["Python", "Machine Learning", "React", "API Integration"],
+      "github": "https://github.com/Vaibhavsrivastava-6105/Product-Recommendation-System-",
+      "demo": "https://project-recommendation-system.vercel.app/"
+    },
+    {
+      "title": "Responsive E-commerce Website",
+      "description": "A fully responsive e-commerce platform featuring product listings, search functionality, and a shopping cart with dynamic state management.",
+      "tech": ["React", "HTML", "CSS", "JavaScript"],
+      "github": "https://github.com/Vaibhavsrivastava-6105",
+      "demo": "#"
+    },
+    {
+      "title": "Price Tracking App",
+      "description": "An application to monitor product prices and display trends over time, featuring automated price updates and responsive dashboards.",
+      "tech": ["React", "HTML", "CSS", "JavaScript"],
+      "github": "https://github.com/Vaibhavsrivastava-6105",
+      "demo": "#"
+    }
+  ]
+}

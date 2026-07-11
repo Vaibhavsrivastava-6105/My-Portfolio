@@ -1,5 +1,6 @@
 import { motion } from "framer-motion"
 import { Button } from "./ui/button"
+import portfolioData from "../data/portfolio.json"
 
 export function Hero() {
   const container = {
@@ -41,12 +42,12 @@ export function Hero() {
               Vaibhav.
             </h1>
             <h3 className="text-2xl md:text-3xl text-muted-foreground font-medium">
-              Software Developer & AI/ML Student
+              {portfolioData.hero.title}
             </h3>
           </motion.div>
           
           <motion.p variants={item} className="text-lg text-muted-foreground leading-relaxed max-w-lg">
-            I'm a B.Tech CSE (AI & ML) student at Babu Banarasi Das Institute of Technology & Management, Lucknow. I am passionate about Artificial Intelligence, building scalable web applications, and crafting seamless user experiences.
+            {portfolioData.hero.bio}
           </motion.p>
           
           <motion.div variants={item} className="flex flex-wrap gap-4 pt-4">
@@ -55,7 +56,7 @@ export function Hero() {
                 View Projects
               </Button>
             </a>
-            <a href="/Vaibhav_Srivastava_Resume.html" target="_blank" className="inline-block">
+            <a href={portfolioData.hero.resumeLink} target="_blank" className="inline-block">
               <Button variant="outline" size="lg" className="rounded-full font-semibold px-8 border-border hover:bg-secondary/80">
                 Download Resume
               </Button>
@@ -75,7 +76,7 @@ export function Hero() {
             {/* Image container */}
             <div className="relative w-64 h-64 md:w-80 md:h-80 rounded-full border-2 border-white shadow-xl overflow-hidden bg-secondary">
               <img 
-                src="/IMG_20240430_224119_235.jpg" 
+                src={portfolioData.hero.image} 
                 alt="Vaibhav Srivastava - Developer"
                 className="w-full h-full object-cover"
               />

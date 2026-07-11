@@ -1,16 +1,10 @@
 import { motion } from "framer-motion"
 import { Card, CardContent } from "./ui/card"
-
-const techStack = [
-  { name: "Python", color: "text-blue-500", icon: "🐍" },
-  { name: "React", color: "text-blue-400", icon: "⚛️" },
-  { name: "Java & C++", color: "text-orange-500", icon: "☕" },
-  { name: "HTML & CSS", color: "text-orange-400", icon: "🌐" },
-  { name: "Machine Learning", color: "text-green-500", icon: "🤖" },
-  { name: "Git & Actions", color: "text-red-500", icon: "🛠️" },
-]
+import portfolioData from "../data/portfolio.json"
 
 export function About() {
+  const techStack = portfolioData.about.techStack;
+
   return (
     <section className="py-24 px-6 relative" id="about">
       <div className="max-w-6xl mx-auto">
@@ -24,10 +18,7 @@ export function About() {
           <h2 className="text-3xl font-bold mb-4">About My Journey</h2>
           <div className="w-20 h-1 bg-primary mb-8 rounded-full"></div>
           <p className="text-lg text-muted-foreground max-w-3xl leading-relaxed">
-            My programming journey is driven by a deep curiosity for Artificial Intelligence and web development. 
-            I specialize in building intelligent applications using Python, creating dynamic user interfaces with React, 
-            and ensuring smooth development workflows with Git and GitHub Actions. I love translating complex problems 
-            into efficient, scalable code and delivering seamless digital experiences.
+            {portfolioData.about.description}
           </p>
         </motion.div>
 
