@@ -1,116 +1,142 @@
 export default async function handler(req, res) {
-  // 1. Only allow POST requests (Telegram sends webhooks as POST)
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  // 2. Validate environment variables
   const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
   const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
   const REPO_OWNER = 'Vaibhavsrivastava-6105';
   const REPO_NAME = 'My-Portfolio';
   const FILE_PATH = 'src/data/portfolio.json';
 
-  if (!GITHUB_TOKEN || !TELEGRAM_TOKEN) {
-    console.error("Missing environment variables");
-    return res.status(500).json({ error: 'Missing config' });
-  }
+  if (!GITHUB_TOKEN || !TELEGRAM_TOKEN) return res.status(500).json({ error: 'Missing config' });
 
-  // 3. Extract the message from the Telegram update
   const update = req.body;
-  if (!update || !update.message || !update.message.text) {
-    return res.status(200).send('OK'); // Return 200 so Telegram doesn't retry
-  }
+  if (!update) return res.status(200).send('OK');
 
-  const chatId = update.message.chat.id;
-  const text = update.message.text.trim();
-
-  // Helper function to send messages back to Telegram
-  const reply = async (messageText) => {
+  const sendMessage = async (chatId, text, replyMarkup = null) => {
+    const payload = { chat_id: chatId, text, parse_mode: 'HTML' };
+    if (replyMarkup) payload.reply_markup = replyMarkup;
+    
     await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: messageText }),
+      body: JSON.stringify(payload),
+    });
+  };
+
+  const answerCallback = async (callbackQueryId) => {
+    await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/answerCallbackQuery`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callback_query_id: callbackQueryId }),
     });
   };
 
   try {
-    // 4. Parse commands
-    if (text === '/start') {
-      await reply("🤖 Welcome to your Portfolio Bot!\n\nCommands:\n/bio [text] - Update your bio\n/title [text] - Update your title");
-      return res.status(200).send('OK');
-    }
+    // Handle Button Clicks (Callback Queries)
+    if (update.callback_query) {
+      const cb = update.callback_query;
+      const chatId = cb.message.chat.id;
+      await answerCallback(cb.id);
 
-    let command = '';
-    let payload = '';
-
-    if (text.startsWith('/bio ')) {
-      command = 'bio';
-      payload = text.replace('/bio ', '').trim();
-    } else if (text.startsWith('/title ')) {
-      command = 'title';
-      payload = text.replace('/title ', '').trim();
-    } else {
-      await reply("Unknown command. Try /bio [text] or /title [text]");
-      return res.status(200).send('OK');
-    }
-
-    await reply(`⏳ Updating ${command}... This will trigger a Vercel rebuild.`);
-
-    // 5. Fetch current portfolio.json from GitHub
-    const fileUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}`;
-    const getRes = await fetch(fileUrl, {
-      headers: {
-        'Authorization': `token ${GITHUB_TOKEN}`,
-        'Accept': 'application/vnd.github.v3+json'
+      if (cb.data === 'edit_bio') {
+        await sendMessage(chatId, "✏️ <b>Please reply to this message</b> with your new Bio:", { force_reply: true });
+      } else if (cb.data === 'edit_title') {
+        await sendMessage(chatId, "✏️ <b>Please reply to this message</b> with your new Title:", { force_reply: true });
+      } else if (cb.data === 'cancel') {
+        await sendMessage(chatId, "❌ Action cancelled. Type /menu to start again.");
       }
-    });
-
-    if (!getRes.ok) {
-      throw new Error(`GitHub API error: ${getRes.statusText}`);
+      return res.status(200).send('OK');
     }
 
-    const fileData = await getRes.json();
-    const sha = fileData.sha;
-    
-    // Decode base64 content
-    const currentContentStr = Buffer.from(fileData.content, 'base64').toString('utf8');
-    const portfolioData = JSON.parse(currentContentStr);
+    // Handle normal messages
+    if (update.message && update.message.text) {
+      const msg = update.message;
+      const chatId = msg.chat.id;
+      const text = msg.text.trim();
 
-    // 6. Modify the data
-    if (command === 'bio') {
-      portfolioData.hero.bio = payload;
-    } else if (command === 'title') {
-      portfolioData.hero.title = payload;
+      // Show Interactive Menu
+      if (text === '/start' || text === '/menu') {
+        const keyboard = {
+          inline_keyboard: [
+            [{ text: "👤 Update Bio", callback_data: "edit_bio" }],
+            [{ text: "💼 Update Title", callback_data: "edit_title" }],
+            [{ text: "❌ Cancel", callback_data: "cancel" }]
+          ]
+        };
+        await sendMessage(chatId, "🤖 <b>Welcome to your Portfolio Bot!</b>\n\nWhat would you like to update?", keyboard);
+        return res.status(200).send('OK');
+      }
+
+      // Handle Forced Replies
+      let command = '';
+      let payload = '';
+
+      if (msg.reply_to_message && msg.reply_to_message.text) {
+        const promptMsg = msg.reply_to_message.text;
+        if (promptMsg.includes('new Bio')) {
+          command = 'bio';
+          payload = text;
+        } else if (promptMsg.includes('new Title')) {
+          command = 'title';
+          payload = text;
+        }
+      }
+
+      // Fallback for old manual commands
+      if (!command) {
+        if (text.startsWith('/bio ')) {
+          command = 'bio'; payload = text.replace('/bio ', '').trim();
+        } else if (text.startsWith('/title ')) {
+          command = 'title'; payload = text.replace('/title ', '').trim();
+        } else {
+          await sendMessage(chatId, "I didn't understand that. Type /menu to see your options.");
+          return res.status(200).send('OK');
+        }
+      }
+
+      await sendMessage(chatId, `⏳ <i>Updating ${command}...</i> This will trigger a Vercel rebuild.`);
+
+      // Fetch, Update, and Push to GitHub
+      const fileUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}`;
+      const getRes = await fetch(fileUrl, {
+        headers: { 'Authorization': `token ${GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json' }
+      });
+      
+      if (!getRes.ok) throw new Error(`GitHub API GET error: ${getRes.statusText}`);
+      const fileData = await getRes.json();
+      const portfolioData = JSON.parse(Buffer.from(fileData.content, 'base64').toString('utf8'));
+
+      if (command === 'bio') portfolioData.hero.bio = payload;
+      else if (command === 'title') portfolioData.hero.title = payload;
+
+      const newContentBase64 = Buffer.from(JSON.stringify(portfolioData, null, 2)).toString('base64');
+      const putRes = await fetch(fileUrl, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `token ${GITHUB_TOKEN}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: `🤖 Bot: Updated ${command} via Telegram Menu`,
+          content: newContentBase64,
+          sha: fileData.sha
+        })
+      });
+
+      if (!putRes.ok) throw new Error(`GitHub API PUT error: ${putRes.statusText}`);
+      
+      await sendMessage(chatId, "✅ <b>Successfully updated GitHub!</b>\n\nVercel is now rebuilding your site. Changes will be live in ~1 minute.");
     }
-
-    // 7. Commit the change back to GitHub
-    const newContentStr = JSON.stringify(portfolioData, null, 2);
-    const newContentBase64 = Buffer.from(newContentStr).toString('base64');
-
-    const putRes = await fetch(fileUrl, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `token ${GITHUB_TOKEN}`,
-        'Accept': 'application/vnd.github.v3+json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        message: `🤖 Bot: Updated ${command} via Telegram`,
-        content: newContentBase64,
-        sha: sha
-      })
-    });
-
-    if (!putRes.ok) {
-      throw new Error(`GitHub API PUT error: ${putRes.statusText}`);
-    }
-
-    await reply("✅ Successfully updated GitHub! Vercel is now rebuilding your site. Changes will be live in ~1 minute.");
-
   } catch (error) {
     console.error(error);
-    await reply(`❌ Error: ${error.message}`);
+    if (update.message) {
+      await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: update.message.chat.id, text: `❌ <b>Error:</b> ${error.message}`, parse_mode: 'HTML' }),
+      });
+    }
   }
 
   return res.status(200).send('OK');
