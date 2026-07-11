@@ -12,6 +12,12 @@ export default async function handler(req, res) {
   const update = req.body;
   if (!update) return res.status(200).send('OK');
 
+  let incomingChatId = null;
+  if (update.message) incomingChatId = update.message.chat.id;
+  else if (update.callback_query) incomingChatId = update.callback_query.message.chat.id;
+
+  const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
+
   const sendMessage = async (chatId, text, replyMarkup = null) => {
     const payload = { chat_id: chatId, text, parse_mode: 'HTML' };
     if (replyMarkup) payload.reply_markup = replyMarkup;
@@ -30,6 +36,19 @@ export default async function handler(req, res) {
       body: JSON.stringify({ callback_query_id: callbackQueryId, text }),
     });
   };
+
+  if (incomingChatId) {
+    if (update.message && update.message.text === '/myid') {
+      await sendMessage(incomingChatId, `🔐 Your Secret Chat ID is:\n<code>${incomingChatId}</code>\n\nAdd this to your Vercel Environment Variables as <b>ADMIN_CHAT_ID</b> to lock down your bot.`);
+      return res.status(200).send('OK');
+    }
+
+    if (ADMIN_CHAT_ID && incomingChatId.toString() !== ADMIN_CHAT_ID) {
+      await sendMessage(incomingChatId, "⛔ <b>Unauthorized Access.</b>\nYou are not the owner of this portfolio.");
+      if (update.callback_query) await answerCallback(update.callback_query.id, "Unauthorized");
+      return res.status(200).send('OK');
+    }
+  }
 
   // Helper to fetch current JSON data from GitHub
   const fetchPortfolioData = async () => {
