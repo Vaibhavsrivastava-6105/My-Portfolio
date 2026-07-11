@@ -23,12 +23,43 @@ export default async function handler(req, res) {
     });
   };
 
-  const answerCallback = async (callbackQueryId) => {
+  const answerCallback = async (callbackQueryId, text = "") => {
     await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/answerCallbackQuery`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ callback_query_id: callbackQueryId }),
+      body: JSON.stringify({ callback_query_id: callbackQueryId, text }),
     });
+  };
+
+  // Helper to fetch current JSON data from GitHub
+  const fetchPortfolioData = async () => {
+    const fileUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}`;
+    const getRes = await fetch(fileUrl, {
+      headers: { 'Authorization': `token ${GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json' }
+    });
+    if (!getRes.ok) throw new Error(`GitHub API GET error: ${getRes.statusText}`);
+    const fileData = await getRes.json();
+    const portfolioData = JSON.parse(Buffer.from(fileData.content, 'base64').toString('utf8'));
+    return { portfolioData, fileData, fileUrl };
+  };
+
+  // Helper to commit changes
+  const commitPortfolioData = async (portfolioData, fileData, fileUrl, commitMessage) => {
+    const newContentBase64 = Buffer.from(JSON.stringify(portfolioData, null, 2)).toString('base64');
+    const putRes = await fetch(fileUrl, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `token ${GITHUB_TOKEN}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: commitMessage,
+        content: newContentBase64,
+        sha: fileData.sha
+      })
+    });
+    if (!putRes.ok) throw new Error(`GitHub API PUT error: ${putRes.statusText}`);
   };
 
   try {
@@ -36,22 +67,104 @@ export default async function handler(req, res) {
     if (update.callback_query) {
       const cb = update.callback_query;
       const chatId = cb.message.chat.id;
-      await answerCallback(cb.id);
+      const data = cb.data;
 
+      // Handle simple prompts
       const prompts = {
         'edit_bio': "✏️ <b>Please reply to this message</b> with your new Bio:",
         'edit_title': "✏️ <b>Please reply to this message</b> with your new Title:",
         'edit_status': "✏️ <b>Please reply to this message</b> with your new Status (e.g. 🟢 Open to work):",
         'edit_about': "✏️ <b>Please reply to this message</b> with your new About Me description:",
         'edit_resume': "✏️ <b>Please reply to this message</b> with your new Resume Link (URL):",
-        'add_achievement': "🏆 <b>Please reply to this message</b> with your Achievement in this exact format:\n<code>Title | Description | Badge URL | Certificate URL</code>\n\n(Tip: use # for links you don't have)"
+        'add_achievement': "🏆 <b>Please reply to this message</b> to add an Achievement in this format:\n<code>Title | Description | Badge URL | Certificate URL</code>\n\n(Use # for links you don't have)",
+        'add_project': "💻 <b>Please reply to this message</b> to add a Project in this format:\n<code>Title | Description | React, Tailwind, NextJS | GitHub URL | Demo URL</code>\n\n(Use # for links you don't have)",
+        'update_hero_image': "🌅 <b>Please reply to this message</b> with your new Hero Image URL:"
       };
 
-      if (prompts[cb.data]) {
-        await sendMessage(chatId, prompts[cb.data], { force_reply: true });
-      } else if (cb.data === 'cancel') {
+      if (prompts[data]) {
+        await answerCallback(cb.id);
+        await sendMessage(chatId, prompts[data], { force_reply: true });
+        return res.status(200).send('OK');
+      } 
+      
+      if (data === 'cancel') {
+        await answerCallback(cb.id);
         await sendMessage(chatId, "❌ Action cancelled. Type /menu to start again.");
+        return res.status(200).send('OK');
       }
+
+      // Handle dynamic menus for Deletion
+      if (data === 'del_proj_menu') {
+        await answerCallback(cb.id, "Fetching projects...");
+        const { portfolioData } = await fetchPortfolioData();
+        const projects = portfolioData.projects || [];
+        
+        if (projects.length === 0) {
+          await sendMessage(chatId, "You don't have any projects to delete!");
+          return res.status(200).send('OK');
+        }
+
+        const keyboard = { inline_keyboard: [] };
+        projects.forEach((p, i) => {
+          keyboard.inline_keyboard.push([{ text: `🗑️ Delete: ${p.title.substring(0, 20)}`, callback_data: `delete_p_${i}` }]);
+        });
+        keyboard.inline_keyboard.push([{ text: "❌ Cancel", callback_data: "cancel" }]);
+
+        await sendMessage(chatId, "Select a project to permanently delete:", keyboard);
+        return res.status(200).send('OK');
+      }
+
+      if (data === 'del_ach_menu') {
+        await answerCallback(cb.id, "Fetching achievements...");
+        const { portfolioData } = await fetchPortfolioData();
+        const achievements = portfolioData.achievements || [];
+        
+        if (achievements.length === 0) {
+          await sendMessage(chatId, "You don't have any achievements to delete!");
+          return res.status(200).send('OK');
+        }
+
+        const keyboard = { inline_keyboard: [] };
+        achievements.forEach((a, i) => {
+          keyboard.inline_keyboard.push([{ text: `🗑️ Delete: ${a.title.substring(0, 20)}`, callback_data: `delete_a_${i}` }]);
+        });
+        keyboard.inline_keyboard.push([{ text: "❌ Cancel", callback_data: "cancel" }]);
+
+        await sendMessage(chatId, "Select an achievement to permanently delete:", keyboard);
+        return res.status(200).send('OK');
+      }
+
+      // Handle actual deletion execution
+      if (data.startsWith('delete_p_') || data.startsWith('delete_a_')) {
+        const isProject = data.startsWith('delete_p_');
+        const index = parseInt(data.split('_')[2]);
+        
+        await answerCallback(cb.id, "Deleting...");
+        await sendMessage(chatId, "⏳ <i>Deleting item and rebuilding website...</i>");
+
+        const { portfolioData, fileData, fileUrl } = await fetchPortfolioData();
+        
+        let deletedItemName = "";
+        if (isProject) {
+          if (!portfolioData.projects) portfolioData.projects = [];
+          if (portfolioData.projects[index]) {
+            deletedItemName = portfolioData.projects[index].title;
+            portfolioData.projects.splice(index, 1);
+          }
+        } else {
+          if (!portfolioData.achievements) portfolioData.achievements = [];
+          if (portfolioData.achievements[index]) {
+            deletedItemName = portfolioData.achievements[index].title;
+            portfolioData.achievements.splice(index, 1);
+          }
+        }
+
+        await commitPortfolioData(portfolioData, fileData, fileUrl, `🤖 Bot: Deleted ${isProject ? 'Project' : 'Achievement'} (${deletedItemName})`);
+        await sendMessage(chatId, `✅ <b>Successfully deleted "${deletedItemName}"!</b>\n\nVercel is now rebuilding your site.`);
+        return res.status(200).send('OK');
+      }
+
+      await answerCallback(cb.id);
       return res.status(200).send('OK');
     }
 
@@ -61,18 +174,24 @@ export default async function handler(req, res) {
       const chatId = msg.chat.id;
       const text = msg.text.trim();
 
+      if (text === '/cancel') {
+        await sendMessage(chatId, "❌ Action cancelled. Type /menu to start again.");
+        return res.status(200).send('OK');
+      }
+
       // Show Interactive Menu
       if (text === '/start' || text === '/menu') {
         const keyboard = {
           inline_keyboard: [
             [{ text: "🔴 Update Status Badge", callback_data: "edit_status" }],
-            [{ text: "💼 Update Title", callback_data: "edit_title" }, { text: "👤 Update Bio", callback_data: "edit_bio" }],
-            [{ text: "📖 Update About Me", callback_data: "edit_about" }, { text: "📎 Update Resume", callback_data: "edit_resume" }],
-            [{ text: "🏆 Add Achievement", callback_data: "add_achievement" }],
+            [{ text: "💼 Title", callback_data: "edit_title" }, { text: "👤 Bio", callback_data: "edit_bio" }, { text: "🌅 Hero Image", callback_data: "update_hero_image" }],
+            [{ text: "📖 About Me", callback_data: "edit_about" }, { text: "📎 Resume", callback_data: "edit_resume" }],
+            [{ text: "💻 Add Project", callback_data: "add_project" }, { text: "🗑️ Delete Project", callback_data: "del_proj_menu" }],
+            [{ text: "🏆 Add Achievement", callback_data: "add_achievement" }, { text: "🗑️ Delete Achievement", callback_data: "del_ach_menu" }],
             [{ text: "❌ Cancel", callback_data: "cancel" }]
           ]
         };
-        await sendMessage(chatId, "🤖 <b>Welcome to your Portfolio Bot!</b>\n\nWhat would you like to update?", keyboard);
+        await sendMessage(chatId, "🤖 <b>Portfolio Command Center</b>\n\nSelect an action below or type /cancel to abort at any time.", keyboard);
         return res.status(200).send('OK');
       }
 
@@ -87,7 +206,9 @@ export default async function handler(req, res) {
         else if (promptMsg.includes('new Status')) { command = 'status'; payload = text; }
         else if (promptMsg.includes('new About Me')) { command = 'about'; payload = text; }
         else if (promptMsg.includes('new Resume Link')) { command = 'resume'; payload = text; }
-        else if (promptMsg.includes('exact format')) { command = 'achievement'; payload = text; }
+        else if (promptMsg.includes('Hero Image')) { command = 'hero_image'; payload = text; }
+        else if (promptMsg.includes('add an Achievement')) { command = 'achievement'; payload = text; }
+        else if (promptMsg.includes('add a Project')) { command = 'project'; payload = text; }
       }
 
       if (!command) {
@@ -97,19 +218,12 @@ export default async function handler(req, res) {
 
       await sendMessage(chatId, `⏳ <i>Processing your update...</i> This will trigger a Vercel rebuild.`);
 
-      // Fetch, Update, and Push to GitHub
-      const fileUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}`;
-      const getRes = await fetch(fileUrl, {
-        headers: { 'Authorization': `token ${GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json' }
-      });
-      
-      if (!getRes.ok) throw new Error(`GitHub API GET error: ${getRes.statusText}`);
-      const fileData = await getRes.json();
-      const portfolioData = JSON.parse(Buffer.from(fileData.content, 'base64').toString('utf8'));
+      const { portfolioData, fileData, fileUrl } = await fetchPortfolioData();
 
       if (command === 'bio') portfolioData.hero.bio = payload;
       else if (command === 'title') portfolioData.hero.title = payload;
       else if (command === 'status') portfolioData.hero.status = payload;
+      else if (command === 'hero_image') portfolioData.hero.image = payload;
       else if (command === 'resume') portfolioData.hero.resumeLink = payload;
       else if (command === 'about') portfolioData.about.description = payload;
       else if (command === 'achievement') {
@@ -126,24 +240,23 @@ export default async function handler(req, res) {
           certificateUrl: parts[3] || "#"
         });
       }
+      else if (command === 'project') {
+        const parts = payload.split('|').map(p => p.trim());
+        if (parts.length < 3) {
+          await sendMessage(chatId, "❌ Invalid format. Make sure to use the `|` character to separate Title, Description, and Tech Stack.");
+          return res.status(200).send('OK');
+        }
+        if (!portfolioData.projects) portfolioData.projects = [];
+        portfolioData.projects.push({
+          title: parts[0] || "New Project",
+          description: parts[1] || "",
+          tech: parts[2] ? parts[2].split(',').map(t => t.trim()) : [],
+          github: parts[3] || "#",
+          demo: parts[4] || "#"
+        });
+      }
 
-      const newContentBase64 = Buffer.from(JSON.stringify(portfolioData, null, 2)).toString('base64');
-      const putRes = await fetch(fileUrl, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `token ${GITHUB_TOKEN}`,
-          'Accept': 'application/vnd.github.v3+json',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          message: `🤖 Bot: Updated ${command} via Telegram Menu`,
-          content: newContentBase64,
-          sha: fileData.sha
-        })
-      });
-
-      if (!putRes.ok) throw new Error(`GitHub API PUT error: ${putRes.statusText}`);
-      
+      await commitPortfolioData(portfolioData, fileData, fileUrl, `🤖 Bot: Added ${command} via Telegram Menu`);
       await sendMessage(chatId, "✅ <b>Successfully updated GitHub!</b>\n\nVercel is now rebuilding your site. Changes will be live in ~1 minute.");
     }
   } catch (error) {
@@ -153,6 +266,12 @@ export default async function handler(req, res) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: update.message.chat.id, text: `❌ <b>Error:</b> ${error.message}`, parse_mode: 'HTML' }),
+      });
+    } else if (update.callback_query) {
+       await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: update.callback_query.message.chat.id, text: `❌ <b>Error:</b> ${error.message}`, parse_mode: 'HTML' }),
       });
     }
   }
