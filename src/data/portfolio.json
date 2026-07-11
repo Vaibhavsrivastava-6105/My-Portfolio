@@ -89,30 +89,13 @@
       ],
       "github": "https://github.com/Vaibhavsrivastava-6105",
       "demo": "#"
-    },
-    {
-      "title": "test bot",
-      "description": "tets bot telegram",
-      "tech": [
-        "nodes",
-        "js",
-        "game  other thing"
-      ],
-      "github": "#",
-      "demo": "#"
     }
   ],
   "achievements": [
     {
-      "title": "Google Cloud Architect",
-      "description": "Designed and deployed a highly available, serverless microservices architecture that scaled to 100k users.",
-      "badgeUrl": "https://img.shields.io/badge/Google_Cloud-4285F4?style=for-the-badge&logo=google-cloud&logoColor=white",
-      "certificateUrl": "#"
-    },
-    {
-      "title": "React Native Specialist",
-      "description": "Completed an intensive 12-week bootcamp focused on cross-platform mobile development, ultimately publishing a featured app to the App Store.",
-      "badgeUrl": "https://img.shields.io/badge/React_Native-20232A?style=for-the-badge&logo=react&logoColor=61DAFB",
+      "title": "Agentic AI Certified Foundations Associate",
+      "description": "A practical, build-it-yourself introduction to AI agents. You’ll leave understanding what an agent really is having built one from scratch, used LangChain, the OpenAI Agents SDK, a real MCP server, and seen where agents run in production using OCI Enterprise AI Agents service and Agentic AI features in the Oracle AI Database.",
+      "badgeUrl": "https://catalog-education.oracle.com/ords/certview/sharebadge?id=BD3E3B0A44BCD839C77AA2943A9DE32B76766EC36AC96BA2578D94743DC3F839",
       "certificateUrl": "#"
     }
   ]
