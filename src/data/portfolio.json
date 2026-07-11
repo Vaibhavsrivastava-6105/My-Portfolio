@@ -1,13 +1,13 @@
 {
   "hero": {
-    "title": "Full-Stack Engineer & AI Researcher",
-    "bio": "i am good",
+    "title": "Agentic AI Developer | Full Stack AI Engineer",
+    "bio": "AI developer focused on building autonomous AI systems, intelligent agents, and automation workflows. I enjoy working with Large Language Models, RAG, modern AI frameworks, and full-stack technologies to create scalable, real-world applications. I continuously learn, experiment, and build projects that push my understanding of artificial intelligence.",
     "image": "/IMG_20240430_224119_235.jpg",
     "resumeLink": "/Vaibhav_Srivastava_Resume.html",
     "status": "open to work"
   },
   "about": {
-    "description": "My programming journey is driven by an obsession with creating systems that feel alive. I specialize in designing intelligent backend architectures with Node.js and Python, while crafting pixel-perfect, highly animated frontend interfaces using React, Tailwind CSS, and Framer Motion. When I'm not coding, I'm usually reading about the latest breakthroughs in Machine Learning.",
+    "description": "Hi, I'm Vaibhav, a B.Tech Computer Science (AI & ML) student with a strong interest in Agentic AI, AI agents, LLM applications, and workflow automation.\n\nI enjoy building intelligent systems that automate repetitive tasks, assist users in making better decisions, and solve practical real-world problems. My work combines AI with modern full-stack development to create scalable and user-friendly applications.\n\nI'm a curious and quick learner who enjoys exploring new AI frameworks, experimenting with emerging technologies, and continuously improving my skills through hands-on projects. I believe the best way to learn is by building, so I'm always working on projects that challenge me and expand my understanding of artificial intelligence.\n\nI'm currently focused on Agentic AI, RAG systems, multi-agent architectures, AI automation, and production-ready AI applications, while actively seeking opportunities to contribute to innovative AI products and collaborate with like-minded developers.",
     "techStack": [
       {
         "name": "Python",
