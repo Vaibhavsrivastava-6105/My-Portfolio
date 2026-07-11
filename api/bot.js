@@ -37,6 +37,17 @@ export default async function handler(req, res) {
     });
   };
 
+  const editMessageText = async (chatId, messageId, text, replyMarkup = null) => {
+    const payload = { chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML' };
+    if (replyMarkup) payload.reply_markup = replyMarkup;
+    
+    await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/editMessageText`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  };
+
   const answerCallback = async (callbackQueryId, text = "") => {
     await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/answerCallbackQuery`, {
       method: 'POST',
@@ -92,6 +103,20 @@ export default async function handler(req, res) {
       })
     });
     if (!putRes.ok) throw new Error(`GitHub API PUT error`);
+  };
+
+  const sendMainMenu = async (chatId) => {
+    const keyboard = {
+      inline_keyboard: [
+        [{ text: "🔴 Update Status Badge", callback_data: "edit_status" }],
+        [{ text: "💼 Title", callback_data: "edit_title" }, { text: "👤 Bio", callback_data: "edit_bio" }, { text: "🌅 Hero Image", callback_data: "update_hero_image" }],
+        [{ text: "📖 About Me", callback_data: "edit_about" }, { text: "📎 Resume", callback_data: "edit_resume" }],
+        [{ text: "💻 Add Project", callback_data: "add_project" }, { text: "🗑️ Delete Project", callback_data: "del_proj_menu" }],
+        [{ text: "🏆 Add Achievement", callback_data: "add_achievement" }, { text: "🗑️ Delete Achievement", callback_data: "del_ach_menu" }],
+        [{ text: "❌ Cancel", callback_data: "cancel" }]
+      ]
+    };
+    await sendMessage(chatId, "🤖 <b>Portfolio Command Center</b>\n\nSelect an action below or type /cancel to abort at any time.", keyboard);
   };
 
   // State Machine Configuration
@@ -154,10 +179,21 @@ export default async function handler(req, res) {
       const chatId = cb.message.chat.id;
       const data = cb.data;
 
+      if (data === 'show_menu') {
+        await answerCallback(cb.id);
+        if (cb.message.text) {
+          // Remove the inline button from the previous message
+          await editMessageText(chatId, cb.message.message_id, cb.message.text);
+        }
+        await sendMainMenu(chatId);
+        return res.status(200).send('OK');
+      }
+
       if (data === 'cancel') {
         await redis.del(`session:${chatId}`);
         await answerCallback(cb.id);
-        await sendMessage(chatId, "❌ Action cancelled. Type /menu to start again.");
+        await editMessageText(chatId, cb.message.message_id, "❌ Action cancelled.");
+        await sendMainMenu(chatId);
         return res.status(200).send('OK');
       }
 
@@ -166,6 +202,7 @@ export default async function handler(req, res) {
         session = { action: data, step: 1, draft: {} };
         await redis.set(`session:${chatId}`, session);
         await answerCallback(cb.id);
+        await editMessageText(chatId, cb.message.message_id, "🤖 <b>Portfolio Command Center</b>\n\n<i>(Menu closed)</i>");
         await sendWizardPrompt(chatId, session);
         return res.status(200).send('OK');
       }
@@ -176,6 +213,8 @@ export default async function handler(req, res) {
           session.step--;
           await redis.set(`session:${chatId}`, session);
           await answerCallback(cb.id);
+          // Delete old prompt keyboard
+          await editMessageText(chatId, cb.message.message_id, "<i>Going back...</i>");
           await sendWizardPrompt(chatId, session);
         } else {
           await answerCallback(cb.id);
@@ -193,11 +232,13 @@ export default async function handler(req, res) {
           session.step++;
           await redis.set(`session:${chatId}`, session);
           await answerCallback(cb.id);
+          await editMessageText(chatId, cb.message.message_id, `<i>Skipped ${currentStep.key}.</i>`);
           await sendWizardPrompt(chatId, session);
         } else {
           session.step++; // Move to confirmation step
           await redis.set(`session:${chatId}`, session);
           await answerCallback(cb.id);
+          await editMessageText(chatId, cb.message.message_id, `<i>Skipped ${currentStep.key}.</i>`);
           await sendConfirmation(chatId, session);
         }
         return res.status(200).send('OK');
@@ -205,7 +246,7 @@ export default async function handler(req, res) {
 
       if (session && data === 'wizard_confirm') {
         await answerCallback(cb.id, "Pushing to GitHub...");
-        await sendMessage(chatId, `⏳ <i>Processing your update...</i> This will trigger a Vercel rebuild.`);
+        await editMessageText(chatId, cb.message.message_id, "⏳ <i>Processing your update... This will trigger a Vercel rebuild.</i>");
 
         const { portfolioData, fileData, fileUrl } = await fetchPortfolioData();
 
@@ -230,7 +271,9 @@ export default async function handler(req, res) {
 
         await commitPortfolioData(portfolioData, fileData, fileUrl, `🤖 Bot: Finished ${session.action} wizard`);
         await redis.del(`session:${chatId}`);
-        await sendMessage(chatId, "✅ <b>Successfully updated GitHub!</b>\n\nVercel is now rebuilding your site. Changes will be live in ~1 minute.");
+        await sendMessage(chatId, "✅ <b>Successfully updated GitHub!</b>\n\nVercel is now rebuilding your site.", {
+          inline_keyboard: [[{ text: "🔙 Back to Menu", callback_data: "show_menu" }]]
+        });
         return res.status(200).send('OK');
       }
 
@@ -240,6 +283,7 @@ export default async function handler(req, res) {
         session = { action: data, step: 1, draft: {} };
         await redis.set(`session:${chatId}`, session);
         await answerCallback(cb.id);
+        await editMessageText(chatId, cb.message.message_id, "🤖 <b>Portfolio Command Center</b>\n\n<i>(Menu closed)</i>");
         const prompt = `✏️ <b>Please reply to this message</b> with your new value for ${data.replace('edit_', '').replace('_', ' ')}:`;
         await sendMessage(chatId, prompt, { force_reply: true, inline_keyboard: [[{ text: "❌ Cancel", callback_data: "cancel" }]] });
         return res.status(200).send('OK');
@@ -248,11 +292,12 @@ export default async function handler(req, res) {
       // Dynamic Deletion Menus (Stateless)
       if (data === 'del_proj_menu' || data === 'del_ach_menu') {
         await answerCallback(cb.id, "Fetching items...");
+        await editMessageText(chatId, cb.message.message_id, "🤖 <b>Portfolio Command Center</b>\n\n<i>(Menu closed)</i>");
         const { portfolioData } = await fetchPortfolioData();
         const items = data === 'del_proj_menu' ? (portfolioData.projects || []) : (portfolioData.achievements || []);
         
         if (items.length === 0) {
-          await sendMessage(chatId, "You don't have any items to delete!");
+          await sendMessage(chatId, "You don't have any items to delete!", { inline_keyboard: [[{ text: "🔙 Back to Menu", callback_data: "show_menu" }]] });
           return res.status(200).send('OK');
         }
 
@@ -272,7 +317,7 @@ export default async function handler(req, res) {
         const index = parseInt(data.split('_')[2]);
         
         await answerCallback(cb.id, "Deleting...");
-        await sendMessage(chatId, "⏳ <i>Deleting item and rebuilding website...</i>");
+        await editMessageText(chatId, cb.message.message_id, "⏳ <i>Deleting item and rebuilding website...</i>");
 
         const { portfolioData, fileData, fileUrl } = await fetchPortfolioData();
         
@@ -285,7 +330,9 @@ export default async function handler(req, res) {
         }
 
         await commitPortfolioData(portfolioData, fileData, fileUrl, `🤖 Bot: Deleted ${deletedItemName}`);
-        await sendMessage(chatId, `✅ <b>Successfully deleted "${deletedItemName}"!</b>\n\nVercel is now rebuilding your site.`);
+        await sendMessage(chatId, `✅ <b>Successfully deleted "${deletedItemName}"!</b>\n\nVercel is now rebuilding your site.`, {
+          inline_keyboard: [[{ text: "🔙 Back to Menu", callback_data: "show_menu" }]]
+        });
         return res.status(200).send('OK');
       }
 
@@ -301,23 +348,14 @@ export default async function handler(req, res) {
 
       if (text === '/cancel') {
         await redis.del(`session:${chatId}`);
-        await sendMessage(chatId, "❌ Action cancelled. Type /menu to start again.");
+        await sendMessage(chatId, "❌ Action cancelled.");
+        await sendMainMenu(chatId);
         return res.status(200).send('OK');
       }
 
       if (text === '/start' || text === '/menu') {
         await redis.del(`session:${chatId}`); // Clear any stuck sessions
-        const keyboard = {
-          inline_keyboard: [
-            [{ text: "🔴 Update Status Badge", callback_data: "edit_status" }],
-            [{ text: "💼 Title", callback_data: "edit_title" }, { text: "👤 Bio", callback_data: "edit_bio" }, { text: "🌅 Hero Image", callback_data: "update_hero_image" }],
-            [{ text: "📖 About Me", callback_data: "edit_about" }, { text: "📎 Resume", callback_data: "edit_resume" }],
-            [{ text: "💻 Add Project", callback_data: "add_project" }, { text: "🗑️ Delete Project", callback_data: "del_proj_menu" }],
-            [{ text: "🏆 Add Achievement", callback_data: "add_achievement" }, { text: "🗑️ Delete Achievement", callback_data: "del_ach_menu" }],
-            [{ text: "❌ Cancel", callback_data: "cancel" }]
-          ]
-        };
-        await sendMessage(chatId, "🤖 <b>Portfolio Command Center</b>\n\nSelect an action below or type /cancel to abort at any time.", keyboard);
+        await sendMainMenu(chatId);
         return res.status(200).send('OK');
       }
 
@@ -356,7 +394,9 @@ export default async function handler(req, res) {
 
         await commitPortfolioData(portfolioData, fileData, fileUrl, `🤖 Bot: Updated via Telegram Menu`);
         await redis.del(`session:${chatId}`);
-        await sendMessage(chatId, "✅ <b>Successfully updated GitHub!</b>\n\nVercel is now rebuilding your site.");
+        await sendMessage(chatId, "✅ <b>Successfully updated GitHub!</b>\n\nVercel is now rebuilding your site.", {
+          inline_keyboard: [[{ text: "🔙 Back to Menu", callback_data: "show_menu" }]]
+        });
         return res.status(200).send('OK');
       }
 
