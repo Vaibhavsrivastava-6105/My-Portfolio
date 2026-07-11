@@ -109,6 +109,12 @@
       "description": "Completed advanced frontend and backend architecture training.",
       "badgeUrl": "https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react",
       "certificateUrl": "https://google.com"
+    },
+    {
+      "title": "test achibved",
+      "description": "it is for the test of the workflow",
+      "badgeUrl": "#",
+      "certificateUrl": "#"
     }
   ]
 }
